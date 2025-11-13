@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Shadab — Game</title>
+<title>Dodge the Asteroids — Swipe Controls</title>
 <style>
   :root{
     --bg:#071021;
@@ -48,40 +48,17 @@
   canvas{width:100%;height:100%;display:block;background:transparent;}
 
   footer{display:flex;justify-content:space-between;align-items:center;gap:8px;}
-  .controls{display:flex;gap:8px;align-items:center;}
   button.btn{background:var(--panel);color:#dbeafe;border:0;padding:8px 12px;border-radius:10px;font-weight:700;}
   button.btn.accent{background:linear-gradient(90deg,var(--accent),#3b82f6);color:#001529;}
-  button.btn.warn{background:linear-gradient(90deg,var(--danger),#fb7185);color:#fff;}
   .small{padding:6px 8px;border-radius:8px;font-size:13px;}
-
-  /* mobile on-screen directional controls (4 buttons) */
-  .mobile-controls{
-    position:absolute;
-    bottom:12px;
-    left:50%;
-    transform:translateX(-50%);
-    display:none; /* shown for narrow screens */
-    gap:10px;
-    z-index:50;
-  }
-  .dpad{display:grid;grid-template-columns:64px 64px 64px;grid-template-rows:64px 64px;gap:8px;align-items:center;justify-items:center;}
-  .dpad button{width:64px;height:64px;border-radius:12px;border:0;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));box-shadow:0 6px 18px rgba(2,6,23,0.5);display:grid;place-items:center;font-weight:700;color:var(--muted);user-select:none;}
-  .dpad .up{grid-column:2;grid-row:1;}
-  .dpad .left{grid-column:1;grid-row:2;}
-  .dpad .right{grid-column:3;grid-row:2;}
-  .dpad .down{grid-column:2;grid-row:2;}
 
   .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
   .center-msg{pointer-events:auto;background:linear-gradient(180deg, rgba(2,6,23,0.8), rgba(2,6,23,0.9));padding:18px;border-radius:10px;text-align:center;}
   .hidden{display:none!important;}
 
-  @media (max-width:720px){
-    .wrap{aspect-ratio: 9/16; width:96vw;}
-    .mobile-controls{display:block;}
-  }
   @media (min-width:721px){ .wrap{aspect-ratio: 16/9;} }
+  @media (max-width:720px){ .wrap{aspect-ratio: 9/16; width:96vw;} }
 
-  .toggle{display:inline-flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;background:var(--panel)}
   .credit{font-size:12px;color:var(--muted);}
 </style>
 </head>
@@ -90,8 +67,8 @@
 <div class="wrap" id="wrap">
   <header>
     <div style="display:flex;flex-direction:column;">
-      <div style="font-weight:800;font-size:16px;color:var(--accent)">Shadab The Interstellar</div>
-      <div style="font-size:12px;color:var(--muted)">Avoid falling asteroids — survive as long as you can</div>
+      <div style="font-weight:800;font-size:16px;color:var(--accent)">Dodge the Asteroids</div>
+      <div style="font-size:12px;color:var(--muted)">Swipe to move — left/right/up/down</div>
     </div>
 
     <div class="stats">
@@ -114,22 +91,13 @@
       </div>
     </div>
 
-    <!-- Mobile directional pad (Up / Left / Right / Down) -->
-    <div class="mobile-controls" id="mobileControls" aria-hidden="false">
-      <div class="dpad">
-        <button id="mUp" class="up">▲</button>
-        <button id="mLeft" class="left">◀</button>
-        <button id="mRight" class="right">▶</button>
-        <button id="mDown" class="down">▼</button>
-      </div>
-    </div>
   </div>
 
   <footer>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="btnPause" class="btn small">Pause</button>
       <button id="btnToggleSound" class="btn small">Sound: On</button>
-      <div class="credit">Use ← → ↑ ↓ or A/D W/S. Swipe on mobile.</div>
+      <div class="credit">Swipe on mobile. Use ← → ↑ ↓ or A/D W/S on desktop.</div>
     </div>
 
     <div style="display:flex;gap:8px;align-items:center">
@@ -140,6 +108,7 @@
 </div>
 
 <script>
+/* Dodge the Asteroids — Swipe-only mobile controls */
 (() => {
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -155,11 +124,6 @@
   const btnToggleSound = document.getElementById('btnToggleSound');
   const btnInfo = document.getElementById('btnInfo');
   const btnShare = document.getElementById('btnShare');
-  const mobileControls = document.getElementById('mobileControls');
-  const mUp = document.getElementById('mUp');
-  const mLeft = document.getElementById('mLeft');
-  const mRight = document.getElementById('mRight');
-  const mDown = document.getElementById('mDown');
 
   let lastTs = 0;
   let running = false;
@@ -177,22 +141,22 @@
   let baseFallSpeed = 160;
   let elapsedSinceStart = 0;
 
-  // Player rocket image (40 x 150 as requested)
+  // Player rocket image (40 x 150)
   const playerImg = new Image();
   playerImg.src = 'rocket.png'; // keep rocket.png next to this HTML
   let playerImgReady = false;
   playerImg.onload = ()=> playerImgReady = true;
 
   const player = {
-    w: 40,  // as you set
+    w: 40,
     h: 150,
     x: Math.round(world.width/2 - 40/2),
     y: world.height - 150 - 20, // bottom spacing
-    speed: 420, // px/s - decreased slightly for better control given tall rocket
+    speed: 420,
     alive: true
   };
 
-  const asteroids = []; // asteroids list
+  const asteroids = [];
 
   let audioCtx = null;
   let soundsOn = true;
@@ -203,7 +167,7 @@
   window.addEventListener('resize', fitCanvas);
   fitCanvas();
 
-  // Input state
+  // Input: keyboard for desktop
   const keys = {};
   window.addEventListener('keydown', e=>{
     keys[e.key.toLowerCase()] = true;
@@ -212,60 +176,59 @@
   });
   window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
 
-  // Touch: detect swipe direction (left/right/up/down)
+  /* ---------------------------
+     Swipe gesture handling
+     - touchstart records start pos/time
+     - touchend compares dx/dy and triggers move
+     - single swipe moves a fixed amount (based on player.speed)
+     --------------------------- */
   let touchStartX = null, touchStartY = null, touchStartTime = 0;
-  const swipeThreshold = 30; // px
-  const swipeTime = 600; // ms
+  const swipeThreshold = 30; // px to consider a swipe
+  const swipeMaxTime = 700; // ms (longer swipe window)
+
   canvas.addEventListener('touchstart', e=>{
     const t = e.touches[0];
     touchStartX = t.clientX;
     touchStartY = t.clientY;
     touchStartTime = Date.now();
   }, {passive:true});
+
   canvas.addEventListener('touchend', e=>{
     if(touchStartX === null || touchStartY === null) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStartX;
     const dy = t.clientY - touchStartY;
     const dt = Date.now() - touchStartTime;
-    // prefer direction with larger magnitude
-    if(dt < swipeTime && (Math.abs(dx) > swipeThreshold || Math.abs(dy) > swipeThreshold)){
+    // ignore tiny taps
+    if(dt < swipeMaxTime && (Math.abs(dx) > swipeThreshold || Math.abs(dy) > swipeThreshold)){
+      // determine primary direction
       if(Math.abs(dx) > Math.abs(dy)){
-        if(dx < 0) movePlayer(-1, 0); else movePlayer(1, 0);
+        if(dx < 0) handleSwipe('left'); else handleSwipe('right');
       } else {
-        if(dy < 0) movePlayer(0, -1); else movePlayer(0, 1);
+        if(dy < 0) handleSwipe('up'); else handleSwipe('down');
       }
     }
     touchStartX = null; touchStartY = null;
   }, {passive:true});
 
-  // Mobile buttons: allow hold for continuous movement
-  let mobileHold = { left:false, right:false, up:false, down:false };
-  function setMobileHold(key, value){ mobileHold[key] = value; }
+  // Optional: allow swipe-and-hold to repeatedly move while finger is down and moving
+  // For swipe-only simple game we keep single-swipe moves.
 
-  mLeft.addEventListener('touchstart', e=>{ setMobileHold('left',true); e.preventDefault(); }, {passive:false});
-  mLeft.addEventListener('touchend', e=>{ setMobileHold('left',false); e.preventDefault(); }, {passive:false});
-  mRight.addEventListener('touchstart', e=>{ setMobileHold('right',true); e.preventDefault(); }, {passive:false});
-  mRight.addEventListener('touchend', e=>{ setMobileHold('right',false); e.preventDefault(); }, {passive:false});
-  mUp.addEventListener('touchstart', e=>{ setMobileHold('up',true); e.preventDefault(); }, {passive:false});
-  mUp.addEventListener('touchend', e=>{ setMobileHold('up',false); e.preventDefault(); }, {passive:false});
-  mDown.addEventListener('touchstart', e=>{ setMobileHold('down',true); e.preventDefault(); }, {passive:false});
-  mDown.addEventListener('touchend', e=>{ setMobileHold('down',false); e.preventDefault(); }, {passive:false});
+  function handleSwipe(dir){
+    // move amount based on player.speed and world scale
+    const swipeMoveAmount = Math.max(48, Math.round(player.speed * 0.16)); // px per swipe
+    if(dir === 'left') player.x -= swipeMoveAmount;
+    else if(dir === 'right') player.x += swipeMoveAmount;
+    else if(dir === 'up') player.y -= swipeMoveAmount;
+    else if(dir === 'down') player.y += swipeMoveAmount;
+    clampPlayer();
+    beep(0.03, 880, 0.04);
+  }
 
-  // Also support mouse down/up for desktop clicks on buttons
-  mLeft.addEventListener('mousedown', ()=> setMobileHold('left',true));
-  mLeft.addEventListener('mouseup', ()=> setMobileHold('left',false));
-  mRight.addEventListener('mousedown', ()=> setMobileHold('right',true));
-  mRight.addEventListener('mouseup', ()=> setMobileHold('right',false));
-  mUp.addEventListener('mousedown', ()=> setMobileHold('up',true));
-  mUp.addEventListener('mouseup', ()=> setMobileHold('up',false));
-  mDown.addEventListener('mousedown', ()=> setMobileHold('down',true));
-  mDown.addEventListener('mouseup', ()=> setMobileHold('down',false));
-
-  // small immediate nudge (for quick swipes)
+  // small nudge function for keyboard (continuous) and small swipe fallback
   function movePlayer(dirX, dirY){
-    if(dirX) player.x += dirX * Math.min(160, player.speed * 0.14);
-    if(dirY) player.y += dirY * Math.min(160, player.speed * 0.14);
+    if(dirX) player.x += dirX * Math.min(200, player.speed * 0.12);
+    if(dirY) player.y += dirY * Math.min(200, player.speed * 0.12);
     clampPlayer();
     beep(0.03,880,0.04);
   }
@@ -274,12 +237,16 @@
   btnResume.addEventListener('click', ()=>{ paused=false; centerPanel.classList.add('hidden'); running=true; lastTs=performance.now(); requestAnimationFrame(loop); });
   btnRestart.addEventListener('click', startGame);
   btnToggleSound.addEventListener('click', ()=>{ soundsOn = !soundsOn; btnToggleSound.textContent = 'Sound: ' + (soundsOn ? 'On' : 'Off'); if(soundsOn && !audioCtx) initAudio(); });
-  btnInfo.addEventListener('click', ()=>{ alert('Use arrow keys or A/D/W/S to move. On mobile swipe or use the on-screen D-pad. Dodge falling asteroids.'); });
+  btnInfo.addEventListener('click', ()=>{ alert('Swipe left/right/up/down on mobile to move. On desktop use arrow keys or A/D/W/S. Survive as long as you can.'); });
   btnShare.addEventListener('click', ()=>{ if(navigator.share){ navigator.share({title:'Dodge the Asteroids', text:`I scored ${Math.floor(score)} in Dodge the Asteroids!`, url:location.href}).catch(()=>{}); } else { navigator.clipboard.writeText(`I scored ${Math.floor(score)} in Dodge the Asteroids!`).then(()=> alert('Score copied to clipboard!')); } });
 
-  // Spawn asteroids (smaller sizes for tall rocket)
+  /* ---------------------------
+     Asteroid spawning & tuning
+     tuned for tall rocket (40x150)
+     smaller radii and slightly slower vx
+     --------------------------- */
   function spawnAsteroid(){
-    const minR = 10, maxR = 35; // balanced for 40x150 rocket
+    const minR = 10, maxR = 35; // balanced sizes
     const r = Math.round(minR + Math.random() * (maxR - minR));
     const x = Math.round(Math.random() * (world.width - r*2)) + r;
     const y = -r - 20;
@@ -303,17 +270,14 @@
   }
 
   function clampPlayer(){
-    // horizontal clamp
     if(player.x < 6) player.x = 6;
     if(player.x + player.w > world.width - 6) player.x = world.width - player.w - 6;
-    // vertical clamp: allow some top clearance and keep bottom spacing (~12-20 px)
-    const topMargin = 10;
+    const topMargin = 8;
     const bottomMargin = 12;
     if(player.y < topMargin) player.y = topMargin;
     if(player.y + player.h > world.height - bottomMargin) player.y = world.height - player.h - bottomMargin;
   }
 
-  // circle-rect collision remains valid
   function circleRectCollision(cx, cy, r, rx, ry, rw, rh){
     const closestX = Math.max(rx, Math.min(cx, rx + rw));
     const closestY = Math.max(ry, Math.min(cy, ry + rh));
@@ -390,18 +354,16 @@
   function update(delta){
     if(paused || gameOver) return;
     elapsedSinceStart += delta * 1000;
-    // a bit slower difficulty ramp for fairness with tall rocket
     difficulty = 1 + elapsedSinceStart / 15000;
     speedLabel.textContent = 'Speed: ' + (difficulty.toFixed(2)) + '×';
 
     lastSpawn += delta*1000;
-    const intervalNow = Math.max(340, spawnInterval - elapsedSinceStart*0.03); // fewer asteroids
+    const intervalNow = Math.max(340, spawnInterval - elapsedSinceStart*0.03);
     if(lastSpawn > intervalNow){
       spawnAsteroid();
       lastSpawn = 0;
     }
 
-    // update asteroids
     for(let i=asteroids.length-1;i>=0;i--){
       const a = asteroids[i];
       a.y += a.vy * delta;
@@ -418,26 +380,19 @@
       }
     }
 
-    // player movement: keyboard & mobile hold
+    // keyboard continuous movement for desktop
     const moveX = (keys['arrowleft'] || keys['a']) ? -1 : (keys['arrowright'] || keys['d']) ? 1 : 0;
     const moveY = (keys['arrowup'] || keys['w']) ? -1 : (keys['arrowdown'] || keys['s']) ? 1 : 0;
-
-    // mobile hold overrides if engaged
-    if(mobileHold.left) player.x -= player.speed * delta;
-    if(mobileHold.right) player.x += player.speed * delta;
-    if(mobileHold.up) player.y -= player.speed * delta;
-    if(mobileHold.down) player.y += player.speed * delta;
 
     if(moveX !== 0) player.x += moveX * player.speed * delta;
     if(moveY !== 0) player.y += moveY * player.speed * delta;
 
     clampPlayer();
 
-    // small passive score over time
     score += delta * 0.45;
     scoreEl.textContent = Math.floor(score);
 
-    // collisions - circle-rect between asteroid and player rect
+    // collisions
     const rx = player.x, ry = player.y, rw = player.w, rh = player.h;
     for(const a of asteroids){
       if(circleRectCollision(a.x, a.y, a.r, rx, ry, rw, rh)){
@@ -450,7 +405,6 @@
   }
 
   function render(){
-    // background
     ctx.fillStyle = '#071021';
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
@@ -462,22 +416,18 @@
 
     drawStars();
 
-    // draw asteroids
     for(const a of asteroids){
       ctx.save();
       ctx.translate(a.x, a.y);
       ctx.rotate(a.rot);
-      // shadow ellipse beneath
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.beginPath();
       ctx.ellipse(6, 6, a.r*0.9, a.r*0.55, Math.PI/6, 0, Math.PI*2);
       ctx.fill();
-      // main body
       ctx.beginPath();
       ctx.fillStyle = a.color;
       ctx.arc(0,0,a.r,0,Math.PI*2);
       ctx.fill();
-      // shading
       const grad = ctx.createRadialGradient(-a.r*0.3, -a.r*0.4, a.r*0.1, 0, 0, a.r);
       grad.addColorStop(0, 'rgba(255,255,255,0.06)');
       grad.addColorStop(1, 'rgba(0,0,0,0.25)');
@@ -485,7 +435,6 @@
       ctx.beginPath();
       ctx.arc(0,0,a.r,0,Math.PI*2);
       ctx.fill();
-      // craters
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       for(const c of a.craters){
         ctx.beginPath();
@@ -498,9 +447,7 @@
       ctx.restore();
     }
 
-    // draw player rocket (40x150) with stronger glow & shadow
     if(playerImgReady){
-      // drop shadow under rocket (thin)
       ctx.save();
       ctx.globalAlpha = 0.18;
       ctx.fillStyle = '#000';
@@ -511,10 +458,8 @@
       roundRect(ctx, sx, sy, shadowW, shadowH, shadowH/2, true);
       ctx.restore();
 
-      // rocket
       ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
 
-      // glow (bigger vertically)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.22;
@@ -523,23 +468,19 @@
       roundRect(ctx, player.x - glowPadX/2, player.y - glowPadY/2, player.w + glowPadX, player.h + glowPadY, 28, true);
       ctx.restore();
 
-      // subtle highlight
       ctx.save();
       ctx.globalAlpha = 0.12;
       ctx.fillStyle = '#60a5fa';
       roundRect(ctx, player.x + 6, player.y + 10, player.w * 0.36, player.h * 0.12, 8, true);
       ctx.restore();
     } else {
-      // fallback rectangle
       roundRect(ctx, player.x, player.y, player.w, player.h, 12, true);
     }
 
-    // ground hint line
     ctx.fillStyle = 'rgba(255,255,255,0.02)';
     ctx.fillRect(0, player.y + player.h + 6, canvas.width, 6);
   }
 
-  // stars
   function drawStars(){
     ctx.save();
     ctx.globalAlpha = 0.12;
@@ -565,13 +506,13 @@
     if(fill){ ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fill(); }
   }
 
-  function updateMobileUI(){ const rect=document.getElementById('wrap').getBoundingClientRect(); if(rect.width < 600) mobileControls.style.display='block'; else mobileControls.style.display='none'; }
+  function updateMobileUI(){ /* nothing to toggle — pure swipe controls */ }
   updateMobileUI(); window.addEventListener('resize', updateMobileUI);
 
   initAudio();
   startGame();
 
-  // expose for debug
+  // debug hook
   window.dodgeAst = { startGame, asteroids, player, get score(){return score;} };
 
 })();
