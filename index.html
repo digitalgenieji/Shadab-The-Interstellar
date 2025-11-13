@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Shadab — Game</title>
+<style>
+  :root{
+    --bg:#071021;
+    --panel:#0b1220cc;
+    --accent:#60a5fa;
+    --danger:#fb7185;
+    --muted:#94a3b8;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+  body{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(circle at 10% 10%, rgba(96,165,250,0.03), transparent 10%),
+      radial-gradient(circle at 90% 90%, rgba(251,113,133,0.02), transparent 10%),
+      var(--bg);
+    color:#e6eef8;
+  }
+
+  .wrap{
+    width:min(920px, 96vw);
+    max-width:920px;
+    aspect-ratio: 9/16;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
+    border-radius:12px;
+    padding:12px;
+    box-shadow: 0 8px 30px rgba(2,6,23,0.7);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    position:relative;
+    overflow:hidden;
+  }
+
+  header{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;}
+  .stats{display:flex;gap:10px;align-items:center;}
+  .chip{background:var(--panel);padding:8px 10px;border-radius:10px;display:flex;gap:8px;align-items:center;font-weight:600;color:var(--muted);}
+  .chip strong{color:var(--accent);font-weight:700;}
+
+  .game-area{flex:1;position:relative;border-radius:8px;overflow:hidden;background:linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.02));display:flex;align-items:center;justify-content:center;}
+  canvas{width:100%;height:100%;display:block;background:transparent;}
+
+  footer{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .controls{display:flex;gap:8px;align-items:center;}
+  button.btn{background:var(--panel);color:#dbeafe;border:0;padding:8px 12px;border-radius:10px;font-weight:700;}
+  button.btn.accent{background:linear-gradient(90deg,var(--accent),#3b82f6);color:#001529;}
+  button.btn.warn{background:linear-gradient(90deg,var(--danger),#fb7185);color:#fff;}
+  .small{padding:6px 8px;border-radius:8px;font-size:13px;}
+
+  /* mobile on-screen directional controls (4 buttons) */
+  .mobile-controls{
+    position:absolute;
+    bottom:12px;
+    left:50%;
+    transform:translateX(-50%);
+    display:none; /* shown for narrow screens */
+    gap:10px;
+    z-index:50;
+  }
+  .dpad{display:grid;grid-template-columns:64px 64px 64px;grid-template-rows:64px 64px;gap:8px;align-items:center;justify-items:center;}
+  .dpad button{width:64px;height:64px;border-radius:12px;border:0;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));box-shadow:0 6px 18px rgba(2,6,23,0.5);display:grid;place-items:center;font-weight:700;color:var(--muted);user-select:none;}
+  .dpad .up{grid-column:2;grid-row:1;}
+  .dpad .left{grid-column:1;grid-row:2;}
+  .dpad .right{grid-column:3;grid-row:2;}
+  .dpad .down{grid-column:2;grid-row:2;}
+
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+  .center-msg{pointer-events:auto;background:linear-gradient(180deg, rgba(2,6,23,0.8), rgba(2,6,23,0.9));padding:18px;border-radius:10px;text-align:center;}
+  .hidden{display:none!important;}
+
+  @media (max-width:720px){
+    .wrap{aspect-ratio: 9/16; width:96vw;}
+    .mobile-controls{display:block;}
+  }
+  @media (min-width:721px){ .wrap{aspect-ratio: 16/9;} }
+
+  .toggle{display:inline-flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;background:var(--panel)}
+  .credit{font-size:12px;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="wrap">
+  <header>
+    <div style="display:flex;flex-direction:column;">
+      <div style="font-weight:800;font-size:16px;color:var(--accent)">Shadab The Interstellar</div>
+      <div style="font-size:12px;color:var(--muted)">Avoid falling asteroids — survive as long as you can</div>
+    </div>
+
+    <div class="stats">
+      <div class="chip">Score: <strong id="score">0</strong></div>
+      <div class="chip">High: <strong id="highscore">0</strong></div>
+      <div class="chip"><span id="speedLabel">Speed: 1.0×</span></div>
+    </div>
+  </header>
+
+  <div class="game-area" id="gameArea">
+    <canvas id="gameCanvas" width="540" height="960"></canvas>
+
+    <div class="overlay">
+      <div id="centerPanel" class="center-msg hidden">
+        <div id="centerText" style="font-weight:800;font-size:18px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button id="btnResume" class="btn small accent">Resume</button>
+          <button id="btnRestart" class="btn small">Restart</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile directional pad (Up / Left / Right / Down) -->
+    <div class="mobile-controls" id="mobileControls" aria-hidden="false">
+      <div class="dpad">
+        <button id="mUp" class="up">▲</button>
+        <button id="mLeft" class="left">◀</button>
+        <button id="mRight" class="right">▶</button>
+        <button id="mDown" class="down">▼</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="btnPause" class="btn small">Pause</button>
+      <button id="btnToggleSound" class="btn small">Sound: On</button>
+      <div class="credit">Use ← → ↑ ↓ or A/D W/S. Swipe on mobile.</div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="btnInfo" class="btn small">How to play</button>
+      <button id="btnShare" class="btn small">Share</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  const scoreEl = document.getElementById('score');
+  const highEl = document.getElementById('highscore');
+  const speedLabel = document.getElementById('speedLabel');
+  const centerPanel = document.getElementById('centerPanel');
+  const centerText = document.getElementById('centerText');
+  const btnResume = document.getElementById('btnResume');
+  const btnRestart = document.getElementById('btnRestart');
+  const btnPause = document.getElementById('btnPause');
+  const btnToggleSound = document.getElementById('btnToggleSound');
+  const btnInfo = document.getElementById('btnInfo');
+  const btnShare = document.getElementById('btnShare');
+  const mobileControls = document.getElementById('mobileControls');
+  const mUp = document.getElementById('mUp');
+  const mLeft = document.getElementById('mLeft');
+  const mRight = document.getElementById('mRight');
+  const mDown = document.getElementById('mDown');
+
+  let lastTs = 0;
+  let running = false;
+  let paused = false;
+  let gameOver = false;
+  let score = 0;
+  let highscore = Number(localStorage.getItem('dodge_high') || 0);
+  highEl.textContent = highscore;
+
+  const world = { width: 540, height: 960 };
+  let scale = 1;
+  let difficulty = 1.0;
+  let spawnInterval = 900;
+  let lastSpawn = 0;
+  let baseFallSpeed = 160;
+  let elapsedSinceStart = 0;
+
+  // Player rocket image (40 x 150 as requested)
+  const playerImg = new Image();
+  playerImg.src = 'rocket.png'; // keep rocket.png next to this HTML
+  let playerImgReady = false;
+  playerImg.onload = ()=> playerImgReady = true;
+
+  const player = {
+    w: 40,  // as you set
+    h: 150,
+    x: Math.round(world.width/2 - 40/2),
+    y: world.height - 150 - 20, // bottom spacing
+    speed: 420, // px/s - decreased slightly for better control given tall rocket
+    alive: true
+  };
+
+  const asteroids = []; // asteroids list
+
+  let audioCtx = null;
+  let soundsOn = true;
+  function initAudio(){ try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ audioCtx = null; } }
+  function beep(vol=0.05, freq=440, dur=0.05){ if(!soundsOn || !audioCtx) return; const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; g.gain.value = vol; o.connect(g); g.connect(audioCtx.destination); o.start(0); o.stop(audioCtx.currentTime + dur); }
+
+  function fitCanvas(){ const rect = canvas.getBoundingClientRect(); canvas.width = world.width; canvas.height = world.height; scale = canvas.width / rect.width; }
+  window.addEventListener('resize', fitCanvas);
+  fitCanvas();
+
+  // Input state
+  const keys = {};
+  window.addEventListener('keydown', e=>{
+    keys[e.key.toLowerCase()] = true;
+    if(['arrowleft','arrowright','a','d','arrowup','arrowdown','w','s'].includes(e.key.toLowerCase())) e.preventDefault();
+    if(e.key===' '){ togglePause(); e.preventDefault(); }
+  });
+  window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
+
+  // Touch: detect swipe direction (left/right/up/down)
+  let touchStartX = null, touchStartY = null, touchStartTime = 0;
+  const swipeThreshold = 30; // px
+  const swipeTime = 600; // ms
+  canvas.addEventListener('touchstart', e=>{
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = Date.now();
+  }, {passive:true});
+  canvas.addEventListener('touchend', e=>{
+    if(touchStartX === null || touchStartY === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const dt = Date.now() - touchStartTime;
+    // prefer direction with larger magnitude
+    if(dt < swipeTime && (Math.abs(dx) > swipeThreshold || Math.abs(dy) > swipeThreshold)){
+      if(Math.abs(dx) > Math.abs(dy)){
+        if(dx < 0) movePlayer(-1, 0); else movePlayer(1, 0);
+      } else {
+        if(dy < 0) movePlayer(0, -1); else movePlayer(0, 1);
+      }
+    }
+    touchStartX = null; touchStartY = null;
+  }, {passive:true});
+
+  // Mobile buttons: allow hold for continuous movement
+  let mobileHold = { left:false, right:false, up:false, down:false };
+  function setMobileHold(key, value){ mobileHold[key] = value; }
+
+  mLeft.addEventListener('touchstart', e=>{ setMobileHold('left',true); e.preventDefault(); }, {passive:false});
+  mLeft.addEventListener('touchend', e=>{ setMobileHold('left',false); e.preventDefault(); }, {passive:false});
+  mRight.addEventListener('touchstart', e=>{ setMobileHold('right',true); e.preventDefault(); }, {passive:false});
+  mRight.addEventListener('touchend', e=>{ setMobileHold('right',false); e.preventDefault(); }, {passive:false});
+  mUp.addEventListener('touchstart', e=>{ setMobileHold('up',true); e.preventDefault(); }, {passive:false});
+  mUp.addEventListener('touchend', e=>{ setMobileHold('up',false); e.preventDefault(); }, {passive:false});
+  mDown.addEventListener('touchstart', e=>{ setMobileHold('down',true); e.preventDefault(); }, {passive:false});
+  mDown.addEventListener('touchend', e=>{ setMobileHold('down',false); e.preventDefault(); }, {passive:false});
+
+  // Also support mouse down/up for desktop clicks on buttons
+  mLeft.addEventListener('mousedown', ()=> setMobileHold('left',true));
+  mLeft.addEventListener('mouseup', ()=> setMobileHold('left',false));
+  mRight.addEventListener('mousedown', ()=> setMobileHold('right',true));
+  mRight.addEventListener('mouseup', ()=> setMobileHold('right',false));
+  mUp.addEventListener('mousedown', ()=> setMobileHold('up',true));
+  mUp.addEventListener('mouseup', ()=> setMobileHold('up',false));
+  mDown.addEventListener('mousedown', ()=> setMobileHold('down',true));
+  mDown.addEventListener('mouseup', ()=> setMobileHold('down',false));
+
+  // small immediate nudge (for quick swipes)
+  function movePlayer(dirX, dirY){
+    if(dirX) player.x += dirX * Math.min(160, player.speed * 0.14);
+    if(dirY) player.y += dirY * Math.min(160, player.speed * 0.14);
+    clampPlayer();
+    beep(0.03,880,0.04);
+  }
+
+  btnPause.addEventListener('click', togglePause);
+  btnResume.addEventListener('click', ()=>{ paused=false; centerPanel.classList.add('hidden'); running=true; lastTs=performance.now(); requestAnimationFrame(loop); });
+  btnRestart.addEventListener('click', startGame);
+  btnToggleSound.addEventListener('click', ()=>{ soundsOn = !soundsOn; btnToggleSound.textContent = 'Sound: ' + (soundsOn ? 'On' : 'Off'); if(soundsOn && !audioCtx) initAudio(); });
+  btnInfo.addEventListener('click', ()=>{ alert('Use arrow keys or A/D/W/S to move. On mobile swipe or use the on-screen D-pad. Dodge falling asteroids.'); });
+  btnShare.addEventListener('click', ()=>{ if(navigator.share){ navigator.share({title:'Dodge the Asteroids', text:`I scored ${Math.floor(score)} in Dodge the Asteroids!`, url:location.href}).catch(()=>{}); } else { navigator.clipboard.writeText(`I scored ${Math.floor(score)} in Dodge the Asteroids!`).then(()=> alert('Score copied to clipboard!')); } });
+
+  // Spawn asteroids (smaller sizes for tall rocket)
+  function spawnAsteroid(){
+    const minR = 10, maxR = 35; // balanced for 40x150 rocket
+    const r = Math.round(minR + Math.random() * (maxR - minR));
+    const x = Math.round(Math.random() * (world.width - r*2)) + r;
+    const y = -r - 20;
+    const vy = (baseFallSpeed * (0.8 + Math.random()*0.8) + r*0.5) * difficulty;
+    const vx = (Math.random()-0.5) * 60 * (0.4 + Math.random()*0.8);
+    const rot = Math.random() * Math.PI*2;
+    const rotSpeed = (Math.random()-0.5) * 1.2;
+    const gray = Math.floor(120 + Math.random()*80);
+    const color = `rgb(${gray},${gray-10},${gray-30})`;
+    const craters = [];
+    const craterCount = 1 + Math.floor(Math.random()*3);
+    for(let i=0;i<craterCount;i++){
+      const cr = Math.max(3, Math.round(r*0.12 + Math.random()*r*0.2));
+      const angle = Math.random()*Math.PI*2;
+      const dist = Math.random()* (r*0.55);
+      const cx = Math.cos(angle)*dist;
+      const cy = Math.sin(angle)*dist;
+      craters.push({cx,cy,cr});
+    }
+    asteroids.push({x,y,r,vy,vx,rot,rotSpeed,color,craters});
+  }
+
+  function clampPlayer(){
+    // horizontal clamp
+    if(player.x < 6) player.x = 6;
+    if(player.x + player.w > world.width - 6) player.x = world.width - player.w - 6;
+    // vertical clamp: allow some top clearance and keep bottom spacing (~12-20 px)
+    const topMargin = 10;
+    const bottomMargin = 12;
+    if(player.y < topMargin) player.y = topMargin;
+    if(player.y + player.h > world.height - bottomMargin) player.y = world.height - player.h - bottomMargin;
+  }
+
+  // circle-rect collision remains valid
+  function circleRectCollision(cx, cy, r, rx, ry, rw, rh){
+    const closestX = Math.max(rx, Math.min(cx, rx + rw));
+    const closestY = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - closestX;
+    const dy = cy - closestY;
+    return (dx*dx + dy*dy) <= (r*r);
+  }
+
+  function startGame(){
+    asteroids.length = 0;
+    score = 0;
+    elapsedSinceStart = 0;
+    difficulty = 1.0;
+    spawnInterval = 900;
+    baseFallSpeed = 160;
+    player.w = 40; player.h = 150;
+    player.x = Math.round(world.width/2 - player.w/2);
+    player.y = world.height - player.h - 20;
+    player.alive = true;
+    gameOver = false;
+    paused = false;
+    lastTs = performance.now();
+    lastSpawn = 0;
+    running = true;
+    centerPanel.classList.add('hidden');
+    btnPause.textContent = 'Pause';
+    requestAnimationFrame(loop);
+    beep(0.04, 660, 0.04);
+  }
+
+  function gameOverSequence(){
+    gameOver = true;
+    running = false;
+    if(score > highscore){
+      highscore = Math.floor(score);
+      localStorage.setItem('dodge_high', highscore);
+      highEl.textContent = highscore;
+    }
+    centerText.innerHTML = `Game Over<br>Score: ${Math.floor(score)}`;
+    centerPanel.classList.remove('hidden');
+    btnResume.classList.add('hidden');
+    btnRestart.classList.remove('hidden');
+    beep(0.07, 160, 0.18);
+  }
+
+  function togglePause(){
+    if(gameOver) return;
+    paused = !paused;
+    if(paused){
+      centerText.textContent = 'Paused';
+      centerPanel.classList.remove('hidden');
+      btnResume.classList.remove('hidden');
+      btnRestart.classList.remove('hidden');
+      btnPause.textContent = 'Resume';
+      running = false;
+    } else {
+      centerPanel.classList.add('hidden');
+      btnPause.textContent = 'Pause';
+      running = true;
+      lastTs = performance.now();
+      requestAnimationFrame(loop);
+    }
+  }
+
+  function loop(ts){
+    if(!running) return;
+    const dt = Math.min(40, ts - lastTs);
+    lastTs = ts;
+    update(dt/1000);
+    render();
+    if(!gameOver) requestAnimationFrame(loop);
+  }
+
+  function update(delta){
+    if(paused || gameOver) return;
+    elapsedSinceStart += delta * 1000;
+    // a bit slower difficulty ramp for fairness with tall rocket
+    difficulty = 1 + elapsedSinceStart / 15000;
+    speedLabel.textContent = 'Speed: ' + (difficulty.toFixed(2)) + '×';
+
+    lastSpawn += delta*1000;
+    const intervalNow = Math.max(340, spawnInterval - elapsedSinceStart*0.03); // fewer asteroids
+    if(lastSpawn > intervalNow){
+      spawnAsteroid();
+      lastSpawn = 0;
+    }
+
+    // update asteroids
+    for(let i=asteroids.length-1;i>=0;i--){
+      const a = asteroids[i];
+      a.y += a.vy * delta;
+      a.x += a.vx * delta;
+      a.rot += a.rotSpeed * delta;
+      if(a.y - a.r > player.y + player.h && !a._scored){
+        a._scored = true;
+        score += 1;
+        scoreEl.textContent = Math.floor(score);
+        if(score % 15 === 0) beep(0.03, 900, 0.04);
+      }
+      if(a.y - a.r > world.height + 200 || a.x < -300 || a.x > world.width + 300){
+        asteroids.splice(i,1);
+      }
+    }
+
+    // player movement: keyboard & mobile hold
+    const moveX = (keys['arrowleft'] || keys['a']) ? -1 : (keys['arrowright'] || keys['d']) ? 1 : 0;
+    const moveY = (keys['arrowup'] || keys['w']) ? -1 : (keys['arrowdown'] || keys['s']) ? 1 : 0;
+
+    // mobile hold overrides if engaged
+    if(mobileHold.left) player.x -= player.speed * delta;
+    if(mobileHold.right) player.x += player.speed * delta;
+    if(mobileHold.up) player.y -= player.speed * delta;
+    if(mobileHold.down) player.y += player.speed * delta;
+
+    if(moveX !== 0) player.x += moveX * player.speed * delta;
+    if(moveY !== 0) player.y += moveY * player.speed * delta;
+
+    clampPlayer();
+
+    // small passive score over time
+    score += delta * 0.45;
+    scoreEl.textContent = Math.floor(score);
+
+    // collisions - circle-rect between asteroid and player rect
+    const rx = player.x, ry = player.y, rw = player.w, rh = player.h;
+    for(const a of asteroids){
+      if(circleRectCollision(a.x, a.y, a.r, rx, ry, rw, rh)){
+        player.alive = false;
+        running = false;
+        gameOverSequence();
+        return;
+      }
+    }
+  }
+
+  function render(){
+    // background
+    ctx.fillStyle = '#071021';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const g = ctx.createLinearGradient(0,0,0,canvas.height);
+    g.addColorStop(0, 'rgba(255,255,255,0.01)');
+    g.addColorStop(1, 'rgba(0,0,0,0.04)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    drawStars();
+
+    // draw asteroids
+    for(const a of asteroids){
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      // shadow ellipse beneath
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath();
+      ctx.ellipse(6, 6, a.r*0.9, a.r*0.55, Math.PI/6, 0, Math.PI*2);
+      ctx.fill();
+      // main body
+      ctx.beginPath();
+      ctx.fillStyle = a.color;
+      ctx.arc(0,0,a.r,0,Math.PI*2);
+      ctx.fill();
+      // shading
+      const grad = ctx.createRadialGradient(-a.r*0.3, -a.r*0.4, a.r*0.1, 0, 0, a.r);
+      grad.addColorStop(0, 'rgba(255,255,255,0.06)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.25)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0,0,a.r,0,Math.PI*2);
+      ctx.fill();
+      // craters
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      for(const c of a.craters){
+        ctx.beginPath();
+        ctx.arc(c.cx, c.cy, c.cr, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // draw player rocket (40x150) with stronger glow & shadow
+    if(playerImgReady){
+      // drop shadow under rocket (thin)
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#000';
+      const shadowW = player.w * 1.6;
+      const shadowH = Math.max(10, player.h * 0.12);
+      const sx = player.x + player.w/2 - shadowW/2 + 6;
+      const sy = player.y + player.h - shadowH/2 + 20;
+      roundRect(ctx, sx, sy, shadowW, shadowH, shadowH/2, true);
+      ctx.restore();
+
+      // rocket
+      ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
+
+      // glow (bigger vertically)
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.22;
+      const glowPadX = 20;
+      const glowPadY = 36;
+      roundRect(ctx, player.x - glowPadX/2, player.y - glowPadY/2, player.w + glowPadX, player.h + glowPadY, 28, true);
+      ctx.restore();
+
+      // subtle highlight
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#60a5fa';
+      roundRect(ctx, player.x + 6, player.y + 10, player.w * 0.36, player.h * 0.12, 8, true);
+      ctx.restore();
+    } else {
+      // fallback rectangle
+      roundRect(ctx, player.x, player.y, player.w, player.h, 12, true);
+    }
+
+    // ground hint line
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    ctx.fillRect(0, player.y + player.h + 6, canvas.width, 6);
+  }
+
+  // stars
+  function drawStars(){
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    for(let i=0;i<40;i++){
+      const x = (i*73 + (Math.floor(elapsedSinceStart)||0)*0.02) % canvas.width;
+      const y = (i*47 + (i*11 % 120)) % canvas.height;
+      ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r, fill){
+    if(w < 2*r) r = w/2;
+    if(h < 2*r) r = h/2;
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+    if(fill){ ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fill(); }
+  }
+
+  function updateMobileUI(){ const rect=document.getElementById('wrap').getBoundingClientRect(); if(rect.width < 600) mobileControls.style.display='block'; else mobileControls.style.display='none'; }
+  updateMobileUI(); window.addEventListener('resize', updateMobileUI);
+
+  initAudio();
+  startGame();
+
+  // expose for debug
+  window.dodgeAst = { startGame, asteroids, player, get score(){return score;} };
+
+})();
+</script>
+</body>
+</html>
