@@ -238,7 +238,7 @@
   btnRestart.addEventListener('click', startGame);
   btnToggleSound.addEventListener('click', ()=>{ soundsOn = !soundsOn; btnToggleSound.textContent = 'Sound: ' + (soundsOn ? 'On' : 'Off'); if(soundsOn && !audioCtx) initAudio(); });
   btnInfo.addEventListener('click', ()=>{ alert('Swipe left/right/up/down on mobile to move. On desktop use arrow keys or A/D/W/S. Survive as long as you can.'); });
-  btnShare.addEventListener('click', ()=>{ if(navigator.share){ navigator.share({title:'Dodge the Asteroids', text:`I scored ${Math.floor(score)} in Dodge the Asteroids!`, url:location.href}).catch(()=>{}); } else { navigator.clipboard.writeText(`I scored ${Math.floor(score)} in Dodge the Asteroids!`).then(()=> alert('Score copied to clipboard!')); } });
+  btnShare.addEventListener('click', ()=>{ if(navigator.share){ navigator.share({title:'Shadab- The Interstellar', text:`I scored ${Math.floor(score)} in Dodge the Asteroids!`, url:location.href}).catch(()=>{}); } else { navigator.clipboard.writeText(`I scored ${Math.floor(score)} in Dodge the Asteroids!`).then(()=> alert('Score copied to clipboard!')); } });
 
   /* ---------------------------
      Asteroid spawning & tuning
